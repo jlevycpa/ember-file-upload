@@ -2,7 +2,7 @@ import Ember from 'ember';
 import Queue from '../queue';
 import sumBy from '../computed/sum-by';
 
-const { get, set, computed, observer } = Ember;
+const { get, set, computed, observer, run: { once } } = Ember;
 
 /**
   The file queue service is a global file
@@ -24,7 +24,7 @@ export default Ember.Service.extend({
     accessed by name via the `find` method.
    */
   init() {
-    set(this, 'queues', Ember.Map.create());
+    set(this, 'queues', Ember.A());
     set(this, 'files', Ember.A());
   },
 
@@ -45,7 +45,7 @@ export default Ember.Service.extend({
     @type {File[]}
     @default []
    */
-  files: [],
+  files: null,
 
   /**
     @private
@@ -75,8 +75,10 @@ export default Ember.Service.extend({
   flushFilesWhenSettled: observer('files.@each.state', function () {
     let files = get(this, 'files');
     let allFilesHaveSettled = files.every(function (file) {
-      return ['uploaded', 'aborted'].indexOf(file.status) !== -1;
+      return ['uploaded', 'aborted'].indexOf(file.state) !== -1;
     });
+
+    if (files.length === 0) { return; }
 
     if (allFilesHaveSettled) {
       get(this, 'files').forEach((file) => set(file, 'queue', null));
@@ -92,7 +94,7 @@ export default Ember.Service.extend({
     @default 0
     @readonly
    */
-  size: sumBy('files.@each.size'),
+  size: sumBy('files', 'size'),
 
   /**
     The number of bytes that have been uploaded to the server.
@@ -102,7 +104,7 @@ export default Ember.Service.extend({
     @default 0
     @readonly
    */
-  loaded: sumBy('files.@each.loaded'),
+  loaded: sumBy('files', 'loaded'),
 
   /**
     The current progress of all uploads, as a percentage in the
@@ -128,7 +130,7 @@ export default Ember.Service.extend({
     @return {Queue} The queue or null if it doesn't exist yet.
    */
   find(name) {
-    return get(this, 'queues').get(name);
+    return get(this, 'queues').findBy('name', name);
   },
 
   /**
@@ -139,11 +141,11 @@ export default Ember.Service.extend({
     @return {Queue} The new queue.
    */
   create(name) {
-    let queues = get(this, 'queues');
-    Ember.assert(`Queue names are required to be unique. "${name}" has already been reserved.`, !queues.has(name));
+    Ember.assert(`Queue names are required to be unique. "${name}" has already been reserved.`, this.find(name) == null);
 
     let queue = Queue.create({ name, fileQueue: this });
-    queues.set(name, queue);
+    get(this, 'queues').push(queue);
+    once(this, 'notifyPropertyChange', 'queues');
 
     return queue;
   }
