@@ -38,7 +38,7 @@ function normalizeOptions(file, url, options) {
   }
 
   if (options.payloadType === 'binary') {
-    options.headers['content-type'] = 'application/octet-stream';
+    options.headers['Content-Type'] = options.contentType || 'application/octet-stream';
   }
 
   // Set Content-Type in the data payload
@@ -272,7 +272,8 @@ export default Ember.Object.extend({
       });
 
     } else if (options.payloadType === 'binary') {
-      let data = get(this, 'blob');
+      // let data = get(this, 'blob');
+      let data = this.blob;
 
       return request.send(data).then((result) => {
         set(this, 'state', 'uploaded');
@@ -320,11 +321,24 @@ export default Ember.Object.extend({
    */
   fromBlob(blob, source='blob') {
     let file = this.create();
-    Object.defineProperty(file, 'blob', {
-      writeable: false,
-      enumerable: false,
-      value: blob
-    });
+    if(Ember.VERSION) { // Getting Cannot redefine property: blob on ember versions lower than 2.3
+      let parts = Ember.VERSION.split('.');
+      if(parts[0] > 1 && parts[1] > 3) {
+        Object.defineProperty(file, 'blob', {
+          writeable: false,
+          enumerable: false,
+          value: blob
+        });
+      } else {
+        file.blob = blob;
+      }
+    } else {
+      Object.defineProperty(file, 'blob', {
+        writeable: false,
+        enumerable: false,
+        value: blob
+      });
+    }
     Object.defineProperty(file, 'source', {
       writeable: false,
       value: source
